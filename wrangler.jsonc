@@ -1,0 +1,22 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "asher-vault-v2",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-03-10",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_sqlite_classes": ["MyMCP"]
+		},
+		{
+			"tag": "v2",
+			"deleted_classes": ["MyMCP"]
+		}
+	],
+	"observability": {
+		"enabled": true
+	}
+}
