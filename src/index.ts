@@ -118,6 +118,37 @@ function buildServer(token: string): McpServer {
 		}
 	);
 
+	server.tool(
+		"vault_move",
+		{
+			from_path: z.string().describe("Current file or folder path relative to Vault root"),
+			to_path: z.string().describe("Destination path relative to Vault root"),
+		},
+		async ({ from_path, to_path }) => {
+			const fromFull = `${VAULT_ROOT}/${from_path}`.replace(/\/+/g, "/");
+			const toFull = `${VAULT_ROOT}/${to_path}`.replace(/\/+/g, "/");
+			await dropboxRequest(token, "files/move_v2", {
+				from_path: fromFull,
+				to_path: toFull,
+				autorename: false,
+			});
+			return { content: [{ type: "text", text: `✓ Moved: ${from_path} → ${to_path}` }] };
+		}
+	);
+
+	server.tool(
+		"vault_create_folder",
+		{ path: z.string().describe("Folder path to create, relative to Vault root") },
+		async ({ path }) => {
+			const folderPath = `${VAULT_ROOT}/${path}`.replace(/\/+/g, "/");
+			await dropboxRequest(token, "files/create_folder_v2", {
+				path: folderPath,
+				autorename: false,
+			});
+			return { content: [{ type: "text", text: `✓ Created folder: ${path}` }] };
+		}
+	);
+
 	return server;
 }
 
