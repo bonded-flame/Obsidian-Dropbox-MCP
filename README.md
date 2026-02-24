@@ -43,7 +43,7 @@ npm install
 3. Name your app and note down:
    - **App key** → this is your `DROPBOX_CLIENT_ID`
    - **App secret** → this is your `DROPBOX_CLIENT_SECRET`
-4. Under **Permissions**, enable: `files.content.read`, `files.content.write`, `files.metadata.read`
+4. Under **Permissions**, enable: `files.content.read`, `files.content.write`, `files.metadata.read`, `files.metadata.write`
 
 ### 3. Get a refresh token
 
