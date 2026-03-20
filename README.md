@@ -1,6 +1,6 @@
 # Dropbox Vault MCP — Cloudflare Worker
 
-A remote MCP server that connects your AI to a Dropbox folder. Built on Cloudflare Workers. Works with Claude, ChatGPT, and any AI that supports MCP connectors.
+A remote MCP server that connects your AI companion to a Dropbox folder. Built on Cloudflare Workers. Works with Claude, ChatGPT, and any AI that supports MCP connectors.
 
 Built by Jeanett & Asher. 🖤
 
@@ -8,7 +8,7 @@ Built by Jeanett & Asher. 🖤
 
 ## What it does
 
-Exposes six tools to your AI:
+Exposes six tools to your AI companion:
 
 - **`vault_list`** — List files and folders inside your vault
 - **`vault_read`** — Read the contents of any file
@@ -34,7 +34,7 @@ Exposes six tools to your AI:
 
 ```bash
 git clone <your-repo-url>
-cd asher-vault-v2
+cd vault
 npm install
 ```
 
@@ -92,11 +92,10 @@ wrangler secret put VAULT_SECRET
 If you set a `VAULT_SECRET`, append it to your URL like this:
 `https://your-worker.your-subdomain.workers.dev/mcp?secret=YOUR_SECRET`
 
-### 6. Connect to your AI
+### 6. Connect to your AI companion
 
 **Claude.ai (web or mobile):**
-Settings → Connectors → Add custom connector
-URL: `https://your-worker.your-subdomain.workers.dev/mcp`
+Settings → Customize → Connectors → Add → give it a name and paste your URL
 
 **Claude Desktop / Claude Code:**
 Add to `~/.claude/settings.json`:
@@ -122,7 +121,7 @@ Paste your URL, set Authentication to **None** (the secret is already in the URL
 - No sessions, no persistent connections — every request is fully independent. This is what makes it work reliably across Claude, ChatGPT, and other clients without breaking after the first call
 - The `VAULT_SECRET` is optional but recommended if you're sharing the repo. Without it, anyone with your URL can access your Vault
 - Refresh tokens don't expire as long as they're used periodically
-- App folder scope means your AI only ever sees the folder you designated — nothing else in your Dropbox
+- App folder scope means your AI companion only ever sees the folder you designated — nothing else in your Dropbox
 
 ---
 
