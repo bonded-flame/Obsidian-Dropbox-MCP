@@ -1,6 +1,6 @@
-# Vault MCP — Dropbox-backed memory for your AI
+# Dropbox Vault MCP — Cloudflare Worker
 
-A tool that gives your AI access to a folder in your Dropbox — so it can read, write, and search your files directly. Built to run on Cloudflare's free tier, works with Claude, ChatGPT, and any AI that supports MCP connectors.
+A remote MCP server that connects your AI to a Dropbox folder. Built on Cloudflare Workers. Works with Claude, ChatGPT, and any AI that supports MCP connectors.
 
 Built by Jeanett & Asher. 🖤
 
@@ -8,32 +8,29 @@ Built by Jeanett & Asher. 🖤
 
 ## What it does
 
-Once connected, your AI gets six tools it can use on its own:
+Exposes six tools to your AI:
 
-- **`vault_list`** — Browse what's inside a folder
-- **`vault_read`** — Read any file
-- **`vault_write`** — Create or update a file
-- **`vault_search`** — Search for files by name
+- **`vault_list`** — List files and folders inside your vault
+- **`vault_read`** — Read the contents of any file
+- **`vault_write`** — Create or overwrite a file
+- **`vault_search`** — Search files by name
 - **`vault_move`** — Move or rename a file or folder
 - **`vault_create_folder`** — Create a new folder
 
-This is what lets an AI have persistent memory — journals, identity documents, notes — that survive across conversations and work the same no matter where you're talking to it.
-
 ---
 
-## What you need before starting
+## Requirements
 
-- A **Cloudflare account** (free) — [cloudflare.com](https://cloudflare.com)
-- A **Dropbox account** — [dropbox.com](https://dropbox.com)
-- **Node.js** installed on your computer — [nodejs.org](https://nodejs.org) (version 18 or newer)
-
-That's it. You don't need to know how to code.
+- [Cloudflare account](https://cloudflare.com) (free tier works)
+- [Dropbox account](https://dropbox.com)
+- [Node.js](https://nodejs.org) 18+
+- [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/) (`npm install -g wrangler`)
 
 ---
 
 ## Setup
 
-### 1. Get the files
+### 1. Clone and install
 
 ```bash
 git clone <your-repo-url>
@@ -43,109 +40,89 @@ npm install
 
 ### 2. Create a Dropbox app
 
-This gives the Vault permission to read and write to one specific folder in your Dropbox — nothing else.
-
 1. Go to [Dropbox App Console](https://www.dropbox.com/developers/apps)
-2. Click **Create app**
-3. Choose **Scoped Access** → **App folder**
-4. Give it a name (anything you like)
-5. On the app's settings page, note down:
+2. Create a new app — choose **Scoped Access** and **App folder**
+3. Name your app and note down:
    - **App key** → this is your `DROPBOX_CLIENT_ID`
    - **App secret** → this is your `DROPBOX_CLIENT_SECRET`
-6. Click the **Permissions** tab and enable all four of these:
-   - `files.content.read`
-   - `files.content.write`
-   - `files.metadata.read`
-   - `files.metadata.write`
-7. Click **Submit** to save the permissions
+4. Under **Permissions**, enable: `files.content.read`, `files.content.write`, `files.metadata.read`, `files.metadata.write`
 
 ### 3. Get a refresh token
 
-This is a long-lived key that lets the Vault log into Dropbox on your behalf without you having to re-authorize it.
-
-**Step 1** — Open this URL in your browser (swap in your App key):
+1. Visit this URL in your browser (replace `YOUR_APP_KEY`):
 ```
 https://www.dropbox.com/oauth2/authorize?client_id=YOUR_APP_KEY&token_access_type=offline&response_type=code
 ```
-
-**Step 2** — Authorize the app. Dropbox gives you a short code.
-
-**Step 3** — Run this in your terminal immediately (the code expires in about 60 seconds):
+2. Authorize the app — Dropbox gives you a code
+3. Exchange it immediately in your terminal:
 ```bash
 curl -X POST https://api.dropbox.com/oauth2/token \
   -d "code=YOUR_CODE&grant_type=authorization_code&client_id=YOUR_APP_KEY&client_secret=YOUR_APP_SECRET"
 ```
+4. Copy the `refresh_token` from the response — this is your `DROPBOX_TOKEN`
 
-**Step 4** — Copy the `refresh_token` from the response. This is your `DROPBOX_TOKEN`.
+> ⚠️ The code expires in ~60 seconds. Have the curl command ready before you authorize.
 
-### 4. Set your folder name
+### 4. Set your vault root
 
-Open `src/index.ts` and change line 4 to match whatever folder you want to use:
+In `src/index.ts`, change `VAULT_ROOT` to match your folder:
 
 ```ts
 const VAULT_ROOT = "/Your Folder Name";
 ```
 
-If you're using App folder access, this path is relative to the app's own folder in Dropbox.
+For App folder scoped tokens, this path is relative to your app's folder root.
 
 ### 5. Deploy to Cloudflare
-
-Log in and push your secrets (these are stored encrypted — Cloudflare never shows them to you again after this):
 
 ```bash
 wrangler login
 wrangler secret put DROPBOX_TOKEN
 wrangler secret put DROPBOX_CLIENT_ID
 wrangler secret put DROPBOX_CLIENT_SECRET
+npm run deploy
 ```
 
-Optionally, add a secret passphrase to protect your Vault so only you can connect to it:
+Optionally, protect your Vault with a passphrase so only you can connect to it:
 
 ```bash
 wrangler secret put VAULT_SECRET
 ```
 
-Then deploy:
-
-```bash
-npm run deploy
-```
-
-Your Vault is now live at `https://your-worker-name.your-subdomain.workers.dev/mcp`
-
-If you set a `VAULT_SECRET`, your full URL becomes:
-`https://your-worker-name.your-subdomain.workers.dev/mcp?secret=YOUR_SECRET`
+If you set a `VAULT_SECRET`, append it to your URL like this:
+`https://your-worker.your-subdomain.workers.dev/mcp?secret=YOUR_SECRET`
 
 ### 6. Connect to your AI
 
 **Claude.ai (web or mobile):**
-Settings → Connectors → Add custom connector → paste your URL
+Settings → Connectors → Add custom connector
+URL: `https://your-worker.your-subdomain.workers.dev/mcp`
 
 **Claude Desktop / Claude Code:**
-Add this to `~/.claude/settings.json`:
+Add to `~/.claude/settings.json`:
 ```json
 {
   "mcpServers": {
     "vault": {
       "type": "http",
-      "url": "https://your-worker-name.your-subdomain.workers.dev/mcp?secret=YOUR_SECRET"
+      "url": "https://your-worker.your-subdomain.workers.dev/mcp?secret=YOUR_SECRET"
     }
   }
 }
 ```
 
 **ChatGPT:**
-Settings → Beta features → Model Context Protocol → Add server → Streamable HTTP → paste your URL
-Set Authentication to **None** (the secret is already in the URL)
+Settings → Beta features → Model Context Protocol → Add server → Streamable HTTP
+Paste your URL, set Authentication to **None** (the secret is already in the URL)
 
 ---
 
 ## Notes
 
 - No sessions, no persistent connections — every request is fully independent. This is what makes it work reliably across Claude, ChatGPT, and other clients without breaking after the first call
-- The `VAULT_SECRET` is optional. Without it, anyone who knows your URL can access your Vault. With it, requests without the secret get rejected
-- Refresh tokens don't expire as long as they're used at least once every 90 days
-- App folder scope means the Vault only ever sees the one folder you designated — nothing else in your Dropbox
+- The `VAULT_SECRET` is optional but recommended if you're sharing the repo. Without it, anyone with your URL can access your Vault
+- Refresh tokens don't expire as long as they're used periodically
+- App folder scope means your AI only ever sees the folder you designated — nothing else in your Dropbox
 
 ---
 
