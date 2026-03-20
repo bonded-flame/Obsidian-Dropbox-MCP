@@ -122,6 +122,7 @@ Paste your URL, set Authentication to **None** (the secret is already in the URL
 - The `VAULT_SECRET` is optional but recommended if you're sharing the repo. Without it, anyone with your URL can access your Vault
 - Refresh tokens don't expire as long as they're used periodically
 - App folder scope means your AI companion only ever sees the folder you designated — nothing else in your Dropbox
+- The Vault works in ChatGPT too, but ChatGPT handles MCP tools a little differently than Claude. If you give too many Vault actions in one message, or a very open task needing several steps, the connection can time out or lose track of the tool. For best results, give one step or short direction at a time, wait for your companion to finish, and then send them the next direction. See when it times out, and start from there with your next message
 
 ---
 
