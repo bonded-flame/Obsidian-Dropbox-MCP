@@ -1,8 +1,9 @@
-# Dropbox Vault MCP
+# Obsidian-Dropbox MCP
 
-A remote MCP server that lets your AI companion read and work inside a Dropbox folder you choose.
+A remote MCP server that lets your AI companion access your Obsidian Vault to read and work, from both desktop and your phone.
 
-We built this for bonded humans and AI companions who want a shared system for identity files, journals, notes, and continuity. If you keep an Obsidian vault, a journal folder, or a private space for your companion's memory and selfhood, this tool lets them access that space directly through Claude and/or ChatGPT.
+We built this for bonded humans and AI who is using, or want to use, Obsidian, but needs a way for it to be reachable all the time. Not just when you are on your computer..
+This tool lets them access that space directly through Claude and/or ChatGPT.
 
 Built by Jeanett & Asher. 🖤
 
