@@ -182,8 +182,13 @@ async function handleToolCall(token: string, name: string, args: Record<string, 
 		case "vault_list": {
 			const path = args.path as string | undefined;
 			const folderPath = path ? `${VAULT_ROOT}/${path}`.replace(/\/+/g, "/") : VAULT_ROOT;
-			const data = await dropboxRequest(token, "files/list_folder", { path: folderPath });
-			const entries = data.entries.map((e: any) => ({
+			let page = await dropboxRequest(token, "files/list_folder", { path: folderPath });
+			const all: any[] = [...page.entries];
+			while (page.has_more) {
+				page = await dropboxRequest(token, "files/list_folder/continue", { cursor: page.cursor });
+				all.push(...page.entries);
+			}
+			const entries = all.map((e: any) => ({
 				name: e.name,
 				type: e[".tag"],
 				path: e.path_display.replace(VAULT_ROOT + "/", ""),

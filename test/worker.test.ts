@@ -127,3 +127,20 @@ test("unreadable JSON is a parse error", async () => {
 	assert.equal(status, 400);
 	assert.equal(json.error.code, -32700);
 });
+
+test("vault_list follows Dropbox's continuation so large folders come back whole", async () => {
+	const entry = (name: string) => ({ name, ".tag": "file", path_display: `/The Vault/${name}` });
+	const dropbox = withDropbox((url) => {
+		if (url.includes("oauth2/token")) return tokenOk();
+		if (url.endsWith("files/list_folder")) return Response.json({ entries: [entry("a.md")], has_more: true, cursor: "c1" });
+		if (url.endsWith("files/list_folder/continue")) return Response.json({ entries: [entry("b.md")], has_more: false, cursor: "c2" });
+		throw new Error(`unexpected ${url}`);
+	});
+	try {
+		const { json } = await rpc(makeEnv(), { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "vault_list", arguments: {} } });
+		const names = JSON.parse(json.result.content[0].text).map((e: { name: string }) => e.name);
+		assert.deepEqual(names, ["a.md", "b.md"]);
+	} finally {
+		dropbox.restore();
+	}
+});
