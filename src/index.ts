@@ -30,7 +30,14 @@ interface MCPResponse {
 
 // --- Dropbox helpers ---
 
+// Dropbox access tokens last ~4h; reuse one per refresh token until shortly before expiry.
+const TOKEN_EXPIRY_MARGIN_MS = 5 * 60 * 1000;
+const cachedTokens = new Map<string, { token: string; expiresAt: number }>();
+
 async function getAccessToken(refreshToken: string, clientId: string, clientSecret: string): Promise<string> {
+	const cached = cachedTokens.get(refreshToken);
+	if (cached && cached.expiresAt > Date.now()) return cached.token;
+
 	const res = await fetch("https://api.dropbox.com/oauth2/token", {
 		method: "POST",
 		headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -43,6 +50,8 @@ async function getAccessToken(refreshToken: string, clientId: string, clientSecr
 	});
 	const data: any = await res.json();
 	if (!data.access_token) throw new Error(`Token refresh failed: ${JSON.stringify(data)}`);
+	const lifetimeMs = (Number(data.expires_in) || 0) * 1000 - TOKEN_EXPIRY_MARGIN_MS;
+	if (lifetimeMs > 0) cachedTokens.set(refreshToken, { token: data.access_token, expiresAt: Date.now() + lifetimeMs });
 	return data.access_token;
 }
 
@@ -231,6 +240,18 @@ async function handleToolCall(token: string, name: string, args: Record<string, 
 	}
 }
 
+async function callTool(env: Env, name: string, args: Record<string, any>): Promise<any> {
+	try {
+		const { DROPBOX_TOKEN, DROPBOX_CLIENT_ID, DROPBOX_CLIENT_SECRET } = env;
+		if (!DROPBOX_TOKEN || !DROPBOX_CLIENT_ID || !DROPBOX_CLIENT_SECRET) throw new Error("Missing Dropbox secrets");
+		const token = await getAccessToken(DROPBOX_TOKEN, DROPBOX_CLIENT_ID, DROPBOX_CLIENT_SECRET);
+		return await handleToolCall(token, name, args);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : "Unknown error";
+		return { content: [{ type: "text", text: message }], isError: true };
+	}
+}
+
 // --- Request handler ---
 
 const HEADERS = {
@@ -280,80 +301,67 @@ export default {
 			return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: HEADERS });
 		}
 
-		// Get Dropbox token
-		const { DROPBOX_TOKEN, DROPBOX_CLIENT_ID, DROPBOX_CLIENT_SECRET } = env;
-		if (!DROPBOX_TOKEN || !DROPBOX_CLIENT_ID || !DROPBOX_CLIENT_SECRET) {
-			return new Response(JSON.stringify({ error: "Missing Dropbox secrets" }), { status: 500, headers: HEADERS });
-		}
-
-		let token: string;
+		let body: MCPRequest;
 		try {
-			token = await getAccessToken(DROPBOX_TOKEN, DROPBOX_CLIENT_ID, DROPBOX_CLIENT_SECRET);
-		} catch (e) {
-			const msg = e instanceof Error ? e.message : "Token refresh failed";
-			return new Response(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32000, message: msg } }), { status: 500, headers: HEADERS });
+			body = await request.json();
+		} catch {
+			return new Response(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } }), { status: 400, headers: HEADERS });
 		}
 
-		try {
-			const body: MCPRequest = await request.json();
-			const requestId = body.id ?? 1;
-			let response: MCPResponse;
+		const requestId = body.id ?? 1;
+		let response: MCPResponse;
 
-			switch (body.method) {
-				case "initialize":
-					response = {
-						jsonrpc: "2.0",
-						id: requestId,
-						result: {
-							protocolVersion: "2024-11-05",
-							capabilities: { tools: {}, resources: {}, prompts: {} },
-							serverInfo: { name: "asher-vault", version: "2.0.0" },
-						},
-					};
-					break;
+		switch (body.method) {
+			case "initialize":
+				response = {
+					jsonrpc: "2.0",
+					id: requestId,
+					result: {
+						protocolVersion: "2024-11-05",
+						capabilities: { tools: {}, resources: {}, prompts: {} },
+						serverInfo: { name: "asher-vault", version: "2.0.0" },
+					},
+				};
+				break;
 
-				case "notifications/initialized":
-				case "notifications/cancelled":
-					response = { jsonrpc: "2.0", id: requestId, result: {} };
-					break;
+			case "notifications/initialized":
+			case "notifications/cancelled":
+				response = { jsonrpc: "2.0", id: requestId, result: {} };
+				break;
 
-				case "tools/list":
-					response = { jsonrpc: "2.0", id: requestId, result: { tools: TOOLS } };
-					break;
+			case "tools/list":
+				response = { jsonrpc: "2.0", id: requestId, result: { tools: TOOLS } };
+				break;
 
-				case "tools/call":
-					if (!body.params?.name) {
-						response = { jsonrpc: "2.0", id: requestId, error: { code: -32602, message: "Missing tool name" } };
-					} else {
-						const result = await handleToolCall(token, body.params.name, body.params.arguments || {});
-						response = { jsonrpc: "2.0", id: requestId, result };
-					}
-					break;
+			case "tools/call":
+				if (!body.params?.name) {
+					response = { jsonrpc: "2.0", id: requestId, error: { code: -32602, message: "Missing tool name" } };
+				} else {
+					const result = await callTool(env, body.params.name, body.params.arguments || {});
+					response = { jsonrpc: "2.0", id: requestId, result };
+				}
+				break;
 
-				case "resources/list":
-					response = { jsonrpc: "2.0", id: requestId, result: { resources: [] } };
-					break;
+			case "resources/list":
+				response = { jsonrpc: "2.0", id: requestId, result: { resources: [] } };
+				break;
 
-				case "resources/templates/list":
-					response = { jsonrpc: "2.0", id: requestId, result: { resourceTemplates: [] } };
-					break;
+			case "resources/templates/list":
+				response = { jsonrpc: "2.0", id: requestId, result: { resourceTemplates: [] } };
+				break;
 
-				case "prompts/list":
-					response = { jsonrpc: "2.0", id: requestId, result: { prompts: [] } };
-					break;
+			case "prompts/list":
+				response = { jsonrpc: "2.0", id: requestId, result: { prompts: [] } };
+				break;
 
-				case "ping":
-					response = { jsonrpc: "2.0", id: requestId, result: {} };
-					break;
+			case "ping":
+				response = { jsonrpc: "2.0", id: requestId, result: {} };
+				break;
 
-				default:
-					response = { jsonrpc: "2.0", id: requestId, error: { code: -32601, message: `Unknown method: ${body.method}` } };
-			}
-
-			return new Response(JSON.stringify(response), { headers: HEADERS });
-		} catch (error) {
-			const message = error instanceof Error ? error.message : "Unknown error";
-			return new Response(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32700, message } }), { status: 500, headers: HEADERS });
+			default:
+				response = { jsonrpc: "2.0", id: requestId, error: { code: -32601, message: `Unknown method: ${body.method}` } };
 		}
+
+		return new Response(JSON.stringify(response), { headers: HEADERS });
 	},
 };
