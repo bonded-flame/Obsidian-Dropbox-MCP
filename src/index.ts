@@ -254,8 +254,12 @@ export default {
 			});
 		}
 
-		if (url.pathname !== "/mcp") {
+		if (url.pathname === "/") {
 			return new Response("Vault MCP is running", { status: 200 });
+		}
+
+		if (url.pathname !== "/mcp") {
+			return new Response(JSON.stringify({ error: "Not found" }), { status: 404, headers: HEADERS });
 		}
 
 		// Auth check — if vault_secret is set, require it as bearer token or ?secret= query param
